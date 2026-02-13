@@ -1,13 +1,11 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { useAuth } from '../contexts/AuthContext';
 import type { Slab } from '../types';
 import { SLAB_TYPES } from '../types';
 import { ComparisonSlider } from '../components/visualization/ComparisonSlider';
 import './VisualizePage.css';
 
 export function VisualizePage() {
-  const { user } = useAuth();
   const [slabs, setSlabs] = useState<Slab[]>([]);
   const [selectedSlab, setSelectedSlab] = useState<Slab | null>(null);
   const [referenceImage, setReferenceImage] = useState<File | null>(null);
@@ -52,7 +50,7 @@ export function VisualizePage() {
   };
 
   const handleGenerate = async () => {
-    if (!selectedSlab || !referenceImage || !user || !projectName.trim()) {
+    if (!selectedSlab || !referenceImage || !projectName.trim()) {
       alert('Please select a slab, upload a reference image, and provide a project name.');
       return;
     }
@@ -61,7 +59,7 @@ export function VisualizePage() {
 
     try {
       const fileExt = referenceImage.name.split('.').pop();
-      const fileName = `${user.id}/${Date.now()}-reference.${fileExt}`;
+      const fileName = `public/${Date.now()}-reference.${fileExt}`;
 
       const { error: uploadError } = await supabase.storage
         .from('project-images')
@@ -76,7 +74,7 @@ export function VisualizePage() {
       const { data: project, error: projectError } = await supabase
         .from('projects')
         .insert({
-          user_id: user.id,
+          user_id: null,
           slab_id: selectedSlab.id,
           name: projectName.trim(),
           reference_image_url: publicUrl,

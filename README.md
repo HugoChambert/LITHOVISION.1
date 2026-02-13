@@ -4,25 +4,23 @@ A professional stone slab visualization platform for countertops and interior su
 
 ## Features
 
-### For Users
 - **Slab Gallery**: Browse available stone slabs filtered by type
 - **AI Visualization**: Upload kitchen photos and see how different slabs look applied to countertops
 - **Before/After Comparison**: Interactive slider to compare original vs. visualized results
-- **Project History**: Save and revisit all your visualizations
+- **Project History**: Save and revisit all visualizations
 - **High-Quality Results**: Photorealistic renders suitable for client presentations
-
-### For Admins
 - **Inventory Management**: Upload and manage stone slab inventory
 - **Material Organization**: Categorize slabs by type (marble, granite, quartzite)
-- **Activation Control**: Enable/disable slabs from user view
+- **Open Access**: No sign-in required - anyone can use all features immediately
 
 ## Tech Stack
 
 - **Frontend**: React 18 + TypeScript + Vite
-- **Backend**: Supabase (PostgreSQL + Auth + Storage)
+- **Backend**: Supabase (PostgreSQL + Storage)
 - **Edge Functions**: Deno-based serverless functions
 - **AI Integration**: OpenAI GPT-4 Vision / Stable Diffusion
 - **Styling**: Custom CSS with modern design system
+- **Access**: Open to all - no authentication required
 
 ## Project Structure
 
@@ -86,20 +84,17 @@ VITE_SUPABASE_SUPABASE_ANON_KEY=<your-supabase-anon-key>
 
 The database setup automatically creates two storage buckets:
 - `slab-images`: Public bucket for slab inventory photos
-- `project-images`: Private bucket for user uploads and results
+- `project-images`: Public bucket for user uploads and results
 
-### 6. Create Admin User
+### 6. Enable Public Access
 
-Create your first admin user via Supabase:
+To enable open access without authentication:
 
-1. Go to Supabase Dashboard > Authentication > Users
-2. Click "Add User" and create an account with email and password
-3. In Supabase SQL Editor, run:
-```sql
-UPDATE profiles SET is_admin = true WHERE email = 'your@email.com';
-```
+1. Go to Supabase Dashboard > SQL Editor
+2. Copy and paste the contents of `database-open-access.sql`
+3. Run the SQL to update Row Level Security policies
 
-Note: User sign-up is disabled in the app. All accounts must be created by administrators.
+This migration removes authentication requirements and makes all features publicly accessible.
 
 ### 7. OpenAI Integration
 
@@ -140,33 +135,31 @@ npm run build
 
 ### Admin Workflow
 
-1. **Sign in** with your admin account
-2. **Navigate to Admin** page
-3. **Add slabs**:
+1. **Navigate to Admin** page
+2. **Add slabs**:
    - Click "Add New Slab"
    - Enter name, type, and description
    - Upload high-quality slab image
    - Save
-4. **Manage inventory**:
+3. **Manage inventory**:
    - Edit slab details
    - Activate/deactivate slabs
    - Delete slabs if needed
 
-### User Workflow
+### Visualization Workflow
 
-1. **Sign in** with your account credentials
-2. **Go to Visualize** page
-3. **Select a slab** from the gallery
-4. **Upload a reference photo** of your kitchen/space
-5. **Enter a project name**
-6. **Click "Generate Visualization"**
-7. **View the result** with interactive before/after slider
-8. **Save to projects** for future reference
+1. **Go to Visualize** page (default landing page)
+2. **Select a slab** from the gallery
+3. **Upload a reference photo** of your kitchen/space
+4. **Enter a project name**
+5. **Click "Generate Visualization"**
+6. **View the result** with interactive before/after slider
+7. Project is automatically saved
 
 ### Viewing Project History
 
-1. Go to **My Projects**
-2. Browse all your visualizations
+1. Go to **Projects** page
+2. Browse all visualizations (from all users)
 3. Click **View** to see the before/after comparison
 4. Delete projects you no longer need
 
@@ -192,13 +185,14 @@ The app uses optimized prompts for each stone type:
 - Natural stone characteristics
 - Premium appearance
 
-## Security Features
+## Access Model
 
-- **Row Level Security**: All database tables protected
-- **Authentication Required**: No anonymous access
-- **Role-Based Access**: Admin-only inventory management
-- **User Isolation**: Users only see their own projects
-- **Secure Storage**: User images isolated by user ID
+- **Open Access**: No authentication required - anyone can use all features
+- **Public Data**: All projects and images are publicly visible
+- **Shared Inventory**: Single stone slab library accessible to all
+- **Public Admin**: Inventory management available to all visitors
+
+Note: This is ideal for demos, trade shows, kiosks, or internal deployments behind a firewall. For production use with multiple customers, consider adding authentication at the hosting level (HTTP Basic Auth, IP whitelisting, etc.).
 
 ## API Integration Notes
 

@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { useAuth } from '../contexts/AuthContext';
 import type { Project, Slab } from '../types';
 import { ComparisonSlider } from '../components/visualization/ComparisonSlider';
 import './ProjectsPage.css';
@@ -10,20 +9,15 @@ type ProjectWithSlab = Project & {
 };
 
 export function ProjectsPage() {
-  const { user } = useAuth();
   const [projects, setProjects] = useState<ProjectWithSlab[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedProject, setSelectedProject] = useState<ProjectWithSlab | null>(null);
 
   useEffect(() => {
-    if (user) {
-      loadProjects();
-    }
-  }, [user]);
+    loadProjects();
+  }, []);
 
   const loadProjects = async () => {
-    if (!user?.id) return;
-
     try {
       const { data, error } = await supabase
         .from('projects')
@@ -31,7 +25,6 @@ export function ProjectsPage() {
           *,
           slabs (*)
         `)
-        .eq('user_id', user.id)
         .order('created_at', { ascending: false });
 
       if (error) throw error;

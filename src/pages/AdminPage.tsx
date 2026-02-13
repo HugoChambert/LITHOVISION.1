@@ -1,12 +1,10 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { useAuth } from '../contexts/AuthContext';
 import type { Slab } from '../types';
 import { SLAB_TYPES } from '../types';
 import './AdminPage.css';
 
 export function AdminPage() {
-  const { isAdmin } = useAuth();
   const [slabs, setSlabs] = useState<Slab[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -21,10 +19,8 @@ export function AdminPage() {
   });
 
   useEffect(() => {
-    if (isAdmin) {
-      loadSlabs();
-    }
-  }, [isAdmin]);
+    loadSlabs();
+  }, []);
 
   const loadSlabs = async () => {
     try {
@@ -147,17 +143,6 @@ export function AdminPage() {
       console.error('Error toggling slab status:', error);
     }
   };
-
-  if (!isAdmin) {
-    return (
-      <div className="container" style={{ paddingTop: '2rem' }}>
-        <div className="card">
-          <h2>Access Denied</h2>
-          <p>You do not have permission to access this page.</p>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="admin-page">
