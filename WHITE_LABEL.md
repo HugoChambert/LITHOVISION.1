@@ -1,6 +1,6 @@
 # White Label Configuration
 
-LithoVision is now configured as a white-label application with **no authentication required**.
+LITHOVISION is now configured as a white-label application with **no authentication required**.
 
 ## Changes Made
 
@@ -17,7 +17,7 @@ LithoVision is now configured as a white-label application with **no authenticat
 All features are now publicly accessible:
 - **Visualizer**: Upload kitchen photos and apply stone slab visualizations
 - **Projects**: View all created projects (no user isolation)
-- **Admin**: Manage stone slab inventory (open to all visitors)
+- **Admin**: Manage stone slab inventory (hidden from navigation, accessible via **Ctrl + Shift + A**)
 
 #### Data Management
 

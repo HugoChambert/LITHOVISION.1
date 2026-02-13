@@ -1,6 +1,6 @@
 # Open Access Implementation - Change Summary
 
-LithoVision has been converted to an **open-access application** with no authentication required.
+LITHOVISION has been converted to an **open-access application** with no authentication required.
 
 ## What Changed
 
@@ -36,8 +36,9 @@ LithoVision has been converted to an **open-access application** with no authent
 **Header Component:**
 - Removed "Sign Out" button
 - Removed user email display
-- Kept all navigation links: Admin, Visualize, Projects
-- All links accessible without authentication
+- **Hidden Admin link** from navigation (accessible via Ctrl + Shift + A keyboard shortcut)
+- Visible navigation: Visualize, Projects
+- All features accessible without authentication
 
 ### 4. Database Changes Required
 
@@ -85,7 +86,7 @@ This migration must be run to enable the changes:
    - Upload reference images
    - Generate visualizations
    - View all projects
-   - Manage slab inventory (admin features)
+   - Manage slab inventory (admin features - access via **Ctrl + Shift + A**)
 
 ### Data Model
 

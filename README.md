@@ -1,6 +1,6 @@
-# LithoVision
+# LITHOVISION
 
-A professional stone slab visualization platform for countertops and interior surfaces. LithoVision allows designers, fabricators, and showrooms to realistically visualize how different stone materials (marble, granite, quartzite) will look in actual kitchen and interior spaces.
+A professional stone slab visualization platform for countertops and interior surfaces. LITHOVISION allows designers, fabricators, and showrooms to realistically visualize how different stone materials (marble, granite, quartzite) will look in actual kitchen and interior spaces.
 
 ## Features
 
@@ -9,7 +9,7 @@ A professional stone slab visualization platform for countertops and interior su
 - **Before/After Comparison**: Interactive slider to compare original vs. visualized results
 - **Project History**: Save and revisit all visualizations
 - **High-Quality Results**: Photorealistic renders suitable for client presentations
-- **Inventory Management**: Upload and manage stone slab inventory
+- **Hidden Admin Access**: Inventory management accessible via **Ctrl + Shift + A** keyboard shortcut
 - **Material Organization**: Categorize slabs by type (marble, granite, quartzite)
 - **Open Access**: No sign-in required - anyone can use all features immediately
 
@@ -135,7 +135,7 @@ npm run build
 
 ### Admin Workflow
 
-1. **Navigate to Admin** page
+1. **Access Admin page** by pressing **Ctrl + Shift + A** (hidden from navigation)
 2. **Add slabs**:
    - Click "Add New Slab"
    - Enter name, type, and description
