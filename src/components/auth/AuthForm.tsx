@@ -3,12 +3,11 @@ import { useAuth } from '../../contexts/AuthContext';
 import './AuthForm.css';
 
 export function AuthForm() {
-  const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const { signIn, signUp } = useAuth();
+  const { signIn } = useAuth();
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -16,11 +15,7 @@ export function AuthForm() {
     setLoading(true);
 
     try {
-      if (isLogin) {
-        await signIn(email, password);
-      } else {
-        await signUp(email, password);
-      }
+      await signIn(email, password);
     } catch (err: any) {
       setError(err.message || 'An error occurred');
     } finally {
@@ -32,8 +27,8 @@ export function AuthForm() {
     <div className="auth-container">
       <div className="auth-card">
         <div className="auth-header">
-          <h1>LithoVision</h1>
-          <p>Stone Slab Visualization Platform</p>
+          <h1>Sign In</h1>
+          <p>Access your account to continue</p>
         </div>
 
         <form onSubmit={handleSubmit} className="auth-form">
@@ -67,28 +62,8 @@ export function AuthForm() {
           {error && <div className="error-message">{error}</div>}
 
           <button type="submit" className="btn btn-primary btn-lg" disabled={loading}>
-            {loading ? (
-              <span className="loading" />
-            ) : isLogin ? (
-              'Sign In'
-            ) : (
-              'Sign Up'
-            )}
+            {loading ? <span className="loading" /> : 'Sign In'}
           </button>
-
-          <div className="auth-toggle">
-            {isLogin ? "Don't have an account? " : 'Already have an account? '}
-            <button
-              type="button"
-              className="link-button"
-              onClick={() => {
-                setIsLogin(!isLogin);
-                setError('');
-              }}
-            >
-              {isLogin ? 'Sign Up' : 'Sign In'}
-            </button>
-          </div>
         </form>
       </div>
     </div>

@@ -90,13 +90,16 @@ The database setup automatically creates two storage buckets:
 
 ### 6. Create Admin User
 
-After signing up for an account, make yourself an admin:
+Create your first admin user via Supabase:
 
-1. Sign up through the app
-2. In Supabase SQL Editor, run:
+1. Go to Supabase Dashboard > Authentication > Users
+2. Click "Add User" and create an account with email and password
+3. In Supabase SQL Editor, run:
 ```sql
 UPDATE profiles SET is_admin = true WHERE email = 'your@email.com';
 ```
+
+Note: User sign-up is disabled in the app. All accounts must be created by administrators.
 
 ### 7. OpenAI Integration
 
@@ -151,7 +154,7 @@ npm run build
 
 ### User Workflow
 
-1. **Sign in** or create an account
+1. **Sign in** with your account credentials
 2. **Go to Visualize** page
 3. **Select a slab** from the gallery
 4. **Upload a reference photo** of your kitchen/space

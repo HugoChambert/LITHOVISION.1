@@ -39,13 +39,17 @@ Already configured in `.env` with your Supabase credentials.
 
 ### 4. Create Admin Account
 ```bash
+# Create user in Supabase Dashboard:
+# Go to Authentication > Users > Add User
+# Create an account with email and password
+
+# Then run this SQL in Supabase:
+UPDATE profiles SET is_admin = true WHERE email = 'your@email.com';
+
 # Start the app
 npm run dev
 
-# Visit http://localhost:5173
-# Sign up with your email
-# Then run this SQL in Supabase:
-UPDATE profiles SET is_admin = true WHERE email = 'your@email.com';
+# Visit http://localhost:5173 and sign in
 ```
 
 ### 5. Add Stone Slabs
@@ -85,7 +89,7 @@ For better image-to-image results, see `OPENAI_SETUP.md` for:
 lithovision/
 ├── src/
 │   ├── components/
-│   │   ├── auth/AuthForm.tsx          # Login/signup
+│   │   ├── auth/AuthForm.tsx          # Login form
 │   │   ├── layout/Header.tsx          # Navigation bar
 │   │   └── visualization/
 │   │       └── ComparisonSlider.tsx   # Before/after slider
