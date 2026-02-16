@@ -5,7 +5,7 @@ import path from 'path'
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
-  base: '/LITHOVISION.1/',
+  base: process.env.NODE_ENV === 'production' ? '/your-repo-name/' : '/',
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
