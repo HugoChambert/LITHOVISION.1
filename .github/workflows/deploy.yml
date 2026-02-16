@@ -2,7 +2,8 @@ name: Deploy to GitHub Pages
 
 on:
   push:
-    branches: [ main ]
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:
@@ -20,27 +21,51 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      
+
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
-          
+
+      - name: Verify Images in Source
+        run: |
+          echo "🔍 Checking if images exist in public folder..."
+          echo "=================================================="
+          ls -lh public/assets/img/ || echo "❌ No images found in public/assets/img/"
+          echo "=================================================="
+
       - name: Install dependencies
         run: npm ci
-        
+
       - name: Build
         run: npm run build
-        env:
-          NODE_ENV: production
-          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
-        
+
+      - name: Verify Images in Build Output
+        run: |
+          echo "🔍 Checking if images were copied to dist folder..."
+          echo "=================================================="
+          ls -lh dist/assets/img/ || echo "❌ No images found in dist/assets/img/"
+          echo ""
+          echo "Counting images in dist:"
+          ls dist/assets/img/*.png 2>/dev/null | wc -l
+          echo "=================================================="
+
+      - name: Verify Build HTML Paths
+        run: |
+          echo "🔍 Checking built index.html for correct asset paths..."
+          echo "=================================================="
+          cat dist/index.html | grep -E "href|src"
+          echo "=================================================="
+          echo "✅ Verification complete!"
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: ./dist
+          path: './dist'
 
   deploy:
     environment:
