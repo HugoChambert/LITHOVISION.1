@@ -8,9 +8,7 @@ const corsHeaders = {
 
 interface RequestBody {
   projectId: string;
-  referenceImageUrl: string;
-  slabImageUrl: string;
-  maskDataUrl: string;
+  compositedImageUrl: string;
   prompt: string;
 }
 
@@ -20,9 +18,9 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const { projectId, referenceImageUrl, slabImageUrl, maskDataUrl, prompt }: RequestBody = await req.json();
+    const { projectId, compositedImageUrl, prompt }: RequestBody = await req.json();
 
-    if (!projectId || !referenceImageUrl || !prompt) {
+    if (!projectId || !compositedImageUrl || !prompt) {
       throw new Error("Missing required fields");
     }
 
@@ -31,17 +29,19 @@ Deno.serve(async (req: Request) => {
       throw new Error("Replicate API key not configured");
     }
 
-    // Extract material name from prompt for a clean inpainting prompt
-    const materialMatch = prompt.match(/Apply (.+?) stone/);
-    const materialName = materialMatch ? materialMatch[1] : "stone";
+    console.log("Starting lighting refinement");
+    console.log("Composited image:", compositedImageUrl);
+    console.log("Prompt:", prompt);
 
-    const inpaintPrompt = `${materialName} stone countertop surface, photorealistic, high resolution, professional interior photography, seamless material, natural stone texture`;
-    const negativePrompt = "blurry, low quality, distorted, cartoon, painting, watermark, text, ugly, deformed, bad lighting";
+    // Use img2img with VERY LOW strength to only adjust lighting/shadows
+    // The composited image already has the exact slab texture
+    const refinementPrompt = `${prompt}, photorealistic interior photography, natural lighting, realistic shadows and reflections on stone countertop surface, ambient occlusion, depth, professional architectural photography, high resolution`;
+    
+    const negativePrompt = "change texture, change material, different colors, different patterns, blurry, low quality, distorted, cartoon, painting, illustration, watermark, text, deformed, overexposed, underexposed, flat lighting";
 
-    console.log("Starting inpainting with material:", materialName);
-    console.log("Has mask:", !!maskDataUrl);
+    console.log("Refinement prompt:", refinementPrompt);
 
-    // Use stability-ai inpainting model - only changes the masked (white) area
+    // Use SDXL img2img with very low strength
     const predictionResponse = await fetch("https://api.replicate.com/v1/predictions", {
       method: "POST",
       headers: {
@@ -49,15 +49,16 @@ Deno.serve(async (req: Request) => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        version: "95b7223104132402a9ae91cc677285bc5eb997834bd2349fa486f53910fd68b3",
+        version: "39ed52f2a78e934b3ba6e2a89f5b1c712de7dfea535525255b1aa35c5565e08b",
         input: {
-          image: referenceImageUrl,
-          mask: maskDataUrl,          // White = replace, Black = keep
-          prompt: inpaintPrompt,
+          image: compositedImageUrl,
+          prompt: refinementPrompt,
           negative_prompt: negativePrompt,
-          num_inference_steps: 50,
-          guidance_scale: 8,
-          scheduler: "K_EULER_ANCESTRAL",
+          strength: 0.15,              // VERY LOW - only tweaks lighting
+          guidance_scale: 7,
+          num_inference_steps: 30,
+          scheduler: "K_EULER",
+          seed: 42,
         },
       }),
     });
@@ -89,7 +90,9 @@ Deno.serve(async (req: Request) => {
 
       result = await pollResponse.json();
       attempts++;
-      console.log(`Attempt ${attempts}: ${result.status}`);
+      if (attempts % 15 === 0) {
+        console.log(`Attempt ${attempts}: ${result.status}`);
+      }
     }
 
     if (result.status === "failed") {
@@ -116,7 +119,10 @@ Deno.serve(async (req: Request) => {
   } catch (error) {
     console.error("Error:", error);
     return new Response(
-      JSON.stringify({ error: error.message || "An error occurred" }),
+      JSON.stringify({ 
+        error: error.message || "An error occurred",
+        details: error instanceof Error ? error.stack : undefined 
+      }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
