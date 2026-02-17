@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase';
 import type { Slab } from '../types';
 import { SLAB_TYPES } from '../types';
 import { ComparisonSlider } from '../components/visualization/ComparisonSlider';
+import { MaskPainter } from '../components/visualization/MaskPainter';
 import './VisualizePage.css';
 
 export function VisualizePage() {
@@ -10,6 +11,7 @@ export function VisualizePage() {
   const [selectedSlab, setSelectedSlab] = useState<Slab | null>(null);
   const [referenceImage, setReferenceImage] = useState<File | null>(null);
   const [referencePreview, setReferencePreview] = useState<string>('');
+  const [maskDataUrl, setMaskDataUrl] = useState<string>('');
   const [projectName, setProjectName] = useState('');
   const [generating, setGenerating] = useState(false);
   const [result, setResult] = useState<{
@@ -41,6 +43,7 @@ export function VisualizePage() {
     const file = e.target.files?.[0];
     if (file) {
       setReferenceImage(file);
+      setMaskDataUrl('');
       const reader = new FileReader();
       reader.onloadend = () => {
         setReferencePreview(reader.result as string);
@@ -52,6 +55,11 @@ export function VisualizePage() {
   const handleGenerate = async () => {
     if (!selectedSlab || !referenceImage || !projectName.trim()) {
       alert('Please select a slab, upload a reference image, and provide a project name.');
+      return;
+    }
+
+    if (!maskDataUrl) {
+      alert('Please paint over the countertop areas before generating.');
       return;
     }
 
@@ -86,7 +94,7 @@ export function VisualizePage() {
       if (projectError) throw projectError;
 
       const slabType = SLAB_TYPES.find((t) => t.value === selectedSlab.type);
-      const prompt = `Apply ${selectedSlab.name} ${selectedSlab.type} stone material to the countertop surfaces in this kitchen. ${slabType?.prompt}. Preserve the original scene geometry, lighting, and all other elements. Only replace the countertop material. The result must look photorealistic and professionally rendered.`;
+      const prompt = `Apply ${selectedSlab.name} ${selectedSlab.type} stone material to the countertop surfaces. ${slabType?.prompt}. Photorealistic interior photography, 8k quality.`;
 
       const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-visualization`;
 
@@ -100,6 +108,7 @@ export function VisualizePage() {
           projectId: project.id,
           referenceImageUrl: publicUrl,
           slabImageUrl: selectedSlab.image_url,
+          maskDataUrl: maskDataUrl,
           prompt: prompt,
         }),
       });
@@ -135,6 +144,7 @@ export function VisualizePage() {
     setSelectedSlab(null);
     setReferenceImage(null);
     setReferencePreview('');
+    setMaskDataUrl('');
     setProjectName('');
     setResult(null);
   };
@@ -213,22 +223,10 @@ export function VisualizePage() {
           </div>
 
           <div className="visualize-section">
-            <h2>2. Upload Reference Image</h2>
-            <div className="upload-area">
-              {referencePreview ? (
-                <div className="preview-container">
-                  <img src={referencePreview} alt="Reference" />
-                  <button
-                    className="btn btn-sm btn-secondary remove-btn"
-                    onClick={() => {
-                      setReferenceImage(null);
-                      setReferencePreview('');
-                    }}
-                  >
-                    Remove
-                  </button>
-                </div>
-              ) : (
+            <h2>2. Upload &amp; Paint Countertops</h2>
+
+            {!referencePreview ? (
+              <div className="upload-area">
                 <label className="upload-label">
                   <input
                     type="file"
@@ -253,8 +251,27 @@ export function VisualizePage() {
                     <span>PNG, JPG up to 10MB</span>
                   </div>
                 </label>
-              )}
-            </div>
+              </div>
+            ) : (
+              <MaskPainter
+                imageUrl={referencePreview}
+                onMaskChange={setMaskDataUrl}
+              />
+            )}
+
+            {referencePreview && (
+              <button
+                className="btn btn-sm btn-secondary"
+                style={{ marginBottom: 'var(--spacing-md)' }}
+                onClick={() => {
+                  setReferenceImage(null);
+                  setReferencePreview('');
+                  setMaskDataUrl('');
+                }}
+              >
+                Change Photo
+              </button>
+            )}
 
             <div className="form-group">
               <label>Project Name</label>
@@ -270,7 +287,7 @@ export function VisualizePage() {
             <button
               className="btn btn-primary btn-lg generate-btn"
               onClick={handleGenerate}
-              disabled={!selectedSlab || !referenceImage || !projectName.trim() || generating}
+              disabled={!selectedSlab || !referenceImage || !projectName.trim() || !maskDataUrl || generating}
             >
               {generating ? (
                 <>
@@ -281,6 +298,12 @@ export function VisualizePage() {
                 'Generate Visualization'
               )}
             </button>
+
+            {referencePreview && !maskDataUrl && (
+              <p style={{ fontSize: '0.8rem', color: 'var(--color-warning)', textAlign: 'center', marginTop: 'var(--spacing-sm)' }}>
+                ⚠️ Paint the countertops before generating
+              </p>
+            )}
           </div>
         </div>
       </div>
