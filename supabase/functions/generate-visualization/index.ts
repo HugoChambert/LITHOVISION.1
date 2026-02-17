@@ -10,21 +10,19 @@ interface RequestBody {
   projectId: string;
   referenceImageUrl: string;
   slabImageUrl: string;
+  maskDataUrl: string;
   prompt: string;
 }
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
-    return new Response(null, {
-      status: 200,
-      headers: corsHeaders,
-    });
+    return new Response(null, { status: 200, headers: corsHeaders });
   }
 
   try {
-    const { projectId, referenceImageUrl, slabImageUrl, prompt }: RequestBody = await req.json();
+    const { projectId, referenceImageUrl, slabImageUrl, maskDataUrl, prompt }: RequestBody = await req.json();
 
-    if (!projectId || !referenceImageUrl || !slabImageUrl || !prompt) {
+    if (!projectId || !referenceImageUrl || !prompt) {
       throw new Error("Missing required fields");
     }
 
@@ -33,7 +31,17 @@ Deno.serve(async (req: Request) => {
       throw new Error("Replicate API key not configured");
     }
 
-    // Start the prediction using Stable Diffusion img2img
+    // Extract material name from prompt for a clean inpainting prompt
+    const materialMatch = prompt.match(/Apply (.+?) stone/);
+    const materialName = materialMatch ? materialMatch[1] : "stone";
+
+    const inpaintPrompt = `${materialName} stone countertop surface, photorealistic, high resolution, professional interior photography, seamless material, natural stone texture`;
+    const negativePrompt = "blurry, low quality, distorted, cartoon, painting, watermark, text, ugly, deformed, bad lighting";
+
+    console.log("Starting inpainting with material:", materialName);
+    console.log("Has mask:", !!maskDataUrl);
+
+    // Use stability-ai inpainting model - only changes the masked (white) area
     const predictionResponse = await fetch("https://api.replicate.com/v1/predictions", {
       method: "POST",
       headers: {
@@ -41,16 +49,15 @@ Deno.serve(async (req: Request) => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        // Stable Diffusion XL img2img model
-        version: "7762fd07cf82c948538e41f63f77d685e02b063e37e496e96eefd46c929f9bdc",
+        version: "95b7223104132402a9ae91cc677285bc5eb997834bd2349fa486f53910fd68b3",
         input: {
           image: referenceImageUrl,
-          prompt: prompt,
-          negative_prompt: "blurry, low quality, distorted, unrealistic, cartoon, painting, drawing, bad proportions, wrong perspective",
-          strength: 0.6,        // How much to change the image (0=no change, 1=completely new)
-          guidance_scale: 7.5,  // How closely to follow the prompt
-          num_inference_steps: 30,
-          scheduler: "K_EULER",
+          mask: maskDataUrl,          // White = replace, Black = keep
+          prompt: inpaintPrompt,
+          negative_prompt: negativePrompt,
+          num_inference_steps: 50,
+          guidance_scale: 8,
+          scheduler: "K_EULER_ANCESTRAL",
         },
       }),
     });
@@ -58,80 +65,59 @@ Deno.serve(async (req: Request) => {
     if (!predictionResponse.ok) {
       const errorData = await predictionResponse.text();
       console.error("Replicate API error:", errorData);
-      throw new Error(`Replicate API error: ${predictionResponse.status}`);
+      throw new Error(`Replicate API error: ${predictionResponse.status} - ${errorData}`);
     }
 
     const prediction = await predictionResponse.json();
     console.log("Prediction started:", prediction.id);
 
-    // Poll for the result (Replicate is async)
+    // Poll for result
     let result = prediction;
     let attempts = 0;
-    const maxAttempts = 60; // Wait up to 60 seconds
+    const maxAttempts = 120;
 
     while (result.status !== "succeeded" && result.status !== "failed" && attempts < maxAttempts) {
-      await new Promise((resolve) => setTimeout(resolve, 1000)); // Wait 1 second
-      
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+
       const pollResponse = await fetch(`https://api.replicate.com/v1/predictions/${prediction.id}`, {
-        headers: {
-          "Authorization": `Token ${replicateApiKey}`,
-        },
+        headers: { "Authorization": `Token ${replicateApiKey}` },
       });
 
       if (!pollResponse.ok) {
-        throw new Error(`Failed to poll prediction: ${pollResponse.status}`);
+        throw new Error(`Failed to poll: ${pollResponse.status}`);
       }
 
       result = await pollResponse.json();
       attempts++;
-      console.log(`Attempt ${attempts}: status = ${result.status}`);
+      console.log(`Attempt ${attempts}: ${result.status}`);
     }
 
     if (result.status === "failed") {
-      throw new Error(`Image generation failed: ${result.error}`);
+      throw new Error(`Generation failed: ${result.error}`);
     }
 
     if (result.status !== "succeeded") {
-      throw new Error("Image generation timed out");
+      throw new Error("Generation timed out");
     }
 
-    // Get the output image URL
     const resultUrl = Array.isArray(result.output) ? result.output[0] : result.output;
 
     if (!resultUrl) {
       throw new Error("No output image generated");
     }
 
-    console.log("Generation succeeded:", resultUrl);
+    console.log("Success:", resultUrl);
 
     return new Response(
-      JSON.stringify({
-        success: true,
-        projectId: projectId,
-        resultUrl: resultUrl,
-      }),
-      {
-        headers: {
-          ...corsHeaders,
-          "Content-Type": "application/json",
-        },
-      }
+      JSON.stringify({ success: true, projectId, resultUrl }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
 
   } catch (error) {
-    console.error("Error in generate-visualization:", error);
+    console.error("Error:", error);
     return new Response(
-      JSON.stringify({
-        error: error.message || "An error occurred",
-        details: error instanceof Error ? error.stack : undefined,
-      }),
-      {
-        status: 500,
-        headers: {
-          ...corsHeaders,
-          "Content-Type": "application/json",
-        },
-      }
+      JSON.stringify({ error: error.message || "An error occurred" }),
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
 });
