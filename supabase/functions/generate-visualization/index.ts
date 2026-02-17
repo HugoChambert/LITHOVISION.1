@@ -28,94 +28,87 @@ Deno.serve(async (req: Request) => {
       throw new Error("Missing required fields");
     }
 
-    const openaiApiKey = Deno.env.get("OPENAI_API_KEY");
-    if (!openaiApiKey) {
-      throw new Error("OpenAI API key not configured");
+    const replicateApiKey = Deno.env.get("REPLICATE_API_KEY");
+    if (!replicateApiKey) {
+      throw new Error("Replicate API key not configured");
     }
 
-    const referenceImageResponse = await fetch(referenceImageUrl);
-    const referenceImageBlob = await referenceImageResponse.blob();
-    const referenceImageBase64 = await blobToBase64(referenceImageBlob);
-
-    const slabImageResponse = await fetch(slabImageUrl);
-    const slabImageBlob = await slabImageResponse.blob();
-    const slabImageBase64 = await blobToBase64(slabImageBlob);
-
-    const enhancedPrompt = `${prompt}
-
-IMPORTANT REQUIREMENTS:
-- Apply the stone material ONLY to horizontal countertop surfaces
-- Maintain all original lighting, shadows, and reflections
-- Preserve exact geometry and perspective of the original scene
-- Match the stone's scale realistically (natural veining should be appropriately sized)
-- Ensure photorealistic quality suitable for client presentation
-- Keep all other elements (cabinets, walls, appliances, floors) unchanged
-- The stone should have natural depth and dimension
-
-Reference the provided slab image for accurate color, pattern, and veining characteristics.`;
-
-    const openaiResponse = await fetch("https://api.openai.com/v1/chat/completions", {
+    // Start the prediction using Stable Diffusion img2img
+    const predictionResponse = await fetch("https://api.replicate.com/v1/predictions", {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${openaiApiKey}`,
+        "Authorization": `Token ${replicateApiKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "gpt-4o",
-        messages: [
-          {
-            role: "user",
-            content: [
-              {
-                type: "text",
-                text: enhancedPrompt,
-              },
-              {
-                type: "image_url",
-                image_url: {
-                  url: `data:image/jpeg;base64,${referenceImageBase64}`,
-                },
-              },
-              {
-                type: "text",
-                text: "Here is the stone slab material to apply to the countertops:",
-              },
-              {
-                type: "image_url",
-                image_url: {
-                  url: `data:image/jpeg;base64,${slabImageBase64}`,
-                },
-              },
-            ],
-          },
-        ],
-        max_tokens: 4096,
+        // Stable Diffusion XL img2img model
+        version: "7762fd07cf82c948538e41f63f77d685e02b063e37e496e96eefd46c929f9bdc",
+        input: {
+          image: referenceImageUrl,
+          prompt: prompt,
+          negative_prompt: "blurry, low quality, distorted, unrealistic, cartoon, painting, drawing, bad proportions, wrong perspective",
+          strength: 0.6,        // How much to change the image (0=no change, 1=completely new)
+          guidance_scale: 7.5,  // How closely to follow the prompt
+          num_inference_steps: 30,
+          scheduler: "K_EULER",
+        },
       }),
     });
 
-    if (!openaiResponse.ok) {
-      const errorData = await openaiResponse.text();
-      console.error("OpenAI API error:", errorData);
-      throw new Error(`OpenAI API error: ${openaiResponse.status}`);
+    if (!predictionResponse.ok) {
+      const errorData = await predictionResponse.text();
+      console.error("Replicate API error:", errorData);
+      throw new Error(`Replicate API error: ${predictionResponse.status}`);
     }
 
-    const openaiData = await openaiResponse.json();
+    const prediction = await predictionResponse.json();
+    console.log("Prediction started:", prediction.id);
 
-    console.log("OpenAI Response:", JSON.stringify(openaiData, null, 2));
+    // Poll for the result (Replicate is async)
+    let result = prediction;
+    let attempts = 0;
+    const maxAttempts = 60; // Wait up to 60 seconds
+
+    while (result.status !== "succeeded" && result.status !== "failed" && attempts < maxAttempts) {
+      await new Promise((resolve) => setTimeout(resolve, 1000)); // Wait 1 second
+      
+      const pollResponse = await fetch(`https://api.replicate.com/v1/predictions/${prediction.id}`, {
+        headers: {
+          "Authorization": `Token ${replicateApiKey}`,
+        },
+      });
+
+      if (!pollResponse.ok) {
+        throw new Error(`Failed to poll prediction: ${pollResponse.status}`);
+      }
+
+      result = await pollResponse.json();
+      attempts++;
+      console.log(`Attempt ${attempts}: status = ${result.status}`);
+    }
+
+    if (result.status === "failed") {
+      throw new Error(`Image generation failed: ${result.error}`);
+    }
+
+    if (result.status !== "succeeded") {
+      throw new Error("Image generation timed out");
+    }
+
+    // Get the output image URL
+    const resultUrl = Array.isArray(result.output) ? result.output[0] : result.output;
+
+    if (!resultUrl) {
+      throw new Error("No output image generated");
+    }
+
+    console.log("Generation succeeded:", resultUrl);
 
     return new Response(
       JSON.stringify({
         success: true,
         projectId: projectId,
-        message: "Note: This is a demonstration response. To enable actual image generation, you need to:",
-        instructions: [
-          "1. Add your OpenAI API key as OPENAI_API_KEY environment variable",
-          "2. The current GPT-4 Vision API analyzes images but doesn't generate new images",
-          "3. For image generation, you would need to use DALL-E 3 or a specialized image-to-image API",
-          "4. Alternative: Use Stable Diffusion API, Midjourney API, or other image generation services"
-        ],
-        resultUrl: referenceImageUrl,
-        openaiResponse: openaiData.choices[0].message.content
+        resultUrl: resultUrl,
       }),
       {
         headers: {
@@ -142,13 +135,3 @@ Reference the provided slab image for accurate color, pattern, and veining chara
     );
   }
 });
-
-async function blobToBase64(blob: Blob): Promise<string> {
-  const buffer = await blob.arrayBuffer();
-  const bytes = new Uint8Array(buffer);
-  let binary = '';
-  for (let i = 0; i < bytes.byteLength; i++) {
-    binary += String.fromCharCode(bytes[i]);
-  }
-  return btoa(binary);
-}
