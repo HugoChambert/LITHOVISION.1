@@ -52,6 +52,100 @@ export function VisualizePage() {
     }
   };
 
+  // Composite the slab image onto the masked area
+  const compositeSlab = async (
+    referenceImgUrl: string,
+    slabImgUrl: string,
+    maskUrl: string
+  ): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return reject('Canvas context not available');
+
+      const refImg = new Image();
+      refImg.crossOrigin = 'anonymous';
+      
+      refImg.onload = () => {
+        canvas.width = refImg.width;
+        canvas.height = refImg.height;
+        
+        // Draw original image
+        ctx.drawImage(refImg, 0, 0);
+        
+        const slabImg = new Image();
+        slabImg.crossOrigin = 'anonymous';
+        
+        slabImg.onload = () => {
+          const maskImg = new Image();
+          
+          maskImg.onload = () => {
+            // Create pattern from slab image
+            const pattern = ctx.createPattern(slabImg, 'repeat');
+            if (!pattern) return reject('Pattern creation failed');
+            
+            // Get mask data to know where to paint
+            const maskCanvas = document.createElement('canvas');
+            maskCanvas.width = canvas.width;
+            maskCanvas.height = canvas.height;
+            const maskCtx = maskCanvas.getContext('2d');
+            if (!maskCtx) return reject('Mask context failed');
+            
+            maskCtx.drawImage(maskImg, 0, 0, canvas.width, canvas.height);
+            const maskData = maskCtx.getImageData(0, 0, canvas.width, canvas.height);
+            
+            // Draw slab texture where mask is white
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            
+            // Scale slab to a reasonable tile size
+            const tileCanvas = document.createElement('canvas');
+            const tileSize = Math.min(canvas.width, canvas.height) / 3; // Adjust scale
+            tileCanvas.width = tileSize;
+            tileCanvas.height = tileSize;
+            const tileCtx = tileCanvas.getContext('2d');
+            if (!tileCtx) return reject('Tile context failed');
+            
+            tileCtx.drawImage(slabImg, 0, 0, tileSize, tileSize);
+            const tileData = tileCtx.getImageData(0, 0, tileSize, tileSize);
+            
+            // Apply slab texture where mask is white
+            for (let y = 0; y < canvas.height; y++) {
+              for (let x = 0; x < canvas.width; x++) {
+                const idx = (y * canvas.width + x) * 4;
+                
+                // Check if mask is white at this pixel (painted area)
+                if (maskData.data[idx] > 128) {
+                  // Get corresponding pixel from tiled slab
+                  const tileX = x % tileSize;
+                  const tileY = y % tileSize;
+                  const tileIdx = (tileY * tileSize + tileX) * 4;
+                  
+                  // Copy slab pixel color
+                  imageData.data[idx] = tileData.data[tileIdx];
+                  imageData.data[idx + 1] = tileData.data[tileIdx + 1];
+                  imageData.data[idx + 2] = tileData.data[tileIdx + 2];
+                  imageData.data[idx + 3] = 255;
+                }
+              }
+            }
+            
+            ctx.putImageData(imageData, 0, 0);
+            resolve(canvas.toDataURL('image/jpeg', 0.95));
+          };
+          
+          maskImg.onerror = () => reject('Mask image load failed');
+          maskImg.src = maskUrl;
+        };
+        
+        slabImg.onerror = () => reject('Slab image load failed');
+        slabImg.src = slabImgUrl;
+      };
+      
+      refImg.onerror = () => reject('Reference image load failed');
+      refImg.src = referenceImgUrl;
+    });
+  };
+
   const handleGenerate = async () => {
     if (!selectedSlab || !referenceImage || !projectName.trim()) {
       alert('Please select a slab, upload a reference image, and provide a project name.');
@@ -79,6 +173,29 @@ export function VisualizePage() {
         .from('project-images')
         .getPublicUrl(fileName);
 
+      console.log('Compositing slab onto image...');
+      
+      // Step 1: Composite slab onto masked area
+      const compositedDataUrl = await compositeSlab(
+        referencePreview,
+        selectedSlab.image_url,
+        maskDataUrl
+      );
+
+      // Upload composited image
+      const compositedBlob = await (await fetch(compositedDataUrl)).blob();
+      const compositedFileName = `public/${Date.now()}-composited.jpg`;
+      
+      const { error: compositedUploadError } = await supabase.storage
+        .from('project-images')
+        .upload(compositedFileName, compositedBlob);
+
+      if (compositedUploadError) throw compositedUploadError;
+
+      const { data: { publicUrl: compositedUrl } } = supabase.storage
+        .from('project-images')
+        .getPublicUrl(compositedFileName);
+
       const { data: project, error: projectError } = await supabase
         .from('projects')
         .insert({
@@ -94,7 +211,10 @@ export function VisualizePage() {
       if (projectError) throw projectError;
 
       const slabType = SLAB_TYPES.find((t) => t.value === selectedSlab.type);
-      const prompt = `Apply ${selectedSlab.name} ${selectedSlab.type} stone material to the countertop surfaces. ${slabType?.prompt}. Photorealistic interior photography, 8k quality.`;
+      const visualDesc = (selectedSlab as any).visual_description || slabType?.prompt || '';
+      const prompt = `Refine lighting and shadows for ${selectedSlab.name} ${selectedSlab.type} countertop. ${visualDesc}`;
+
+      console.log('Sending to AI for lighting refinement...');
 
       const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-visualization`;
 
@@ -106,9 +226,7 @@ export function VisualizePage() {
         },
         body: JSON.stringify({
           projectId: project.id,
-          referenceImageUrl: publicUrl,
-          slabImageUrl: selectedSlab.image_url,
-          maskDataUrl: maskDataUrl,
+          compositedImageUrl: compositedUrl,
           prompt: prompt,
         }),
       });
@@ -292,7 +410,7 @@ export function VisualizePage() {
               {generating ? (
                 <>
                   <span className="loading" />
-                  Generating Visualization...
+                  Generating with exact slab...
                 </>
               ) : (
                 'Generate Visualization'
