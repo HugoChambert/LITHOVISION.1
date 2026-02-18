@@ -68,7 +68,7 @@ export function MaskPainter({ imageUrl, onMaskChange }: MaskPainterProps) {
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
     if (!ctx) return;
 
-    ctx.fillStyle = 'rgba(255, 50, 50, 0.65)';
+    ctx.fillStyle = 'rgba(0,1,1, 0.65)';
 
     if (lastPos.current) {
       const dist = Math.hypot(x - lastPos.current.x, y - lastPos.current.y);
