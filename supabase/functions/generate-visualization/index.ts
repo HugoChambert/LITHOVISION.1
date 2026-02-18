@@ -109,7 +109,30 @@ async function applyTexture(body: ApplyRequest, apiKey: string) {
   console.log("Slab:", slabName, slabType);
 
   // Use ControlNet Tile to apply the exact slab texture with realistic lighting
-  const prompt = `photorealistic ${slabType} stone countertop surface, ${slabName}, natural stone texture with exact patterns and colors from reference image, professional interior photography, realistic lighting and shadows, ambient occlusion, depth, high resolution, seamless material, polished surface finish`;
+  const prompt = `CRITICAL: Apply EXACTLY ${slabName} ${slabType} material to the horizontal surface.
+
+SELECTED STONE SPECIFICATIONS (USE EXACTLY THESE):
+- Material Name: ${slabType}
+- Stone Type: ${slabType}
+
+SURFACE CONTEXT:
+The selected area is a horizontal surface (kitchen countertop, bathroom vanity, dining table, or similar flat surface). Automatically recognize the surface type by the red mask and apply the EXACT stone material specified above.
+
+RENDERING REQUIREMENTS:
+Must apply ${slabName} with these exact characteristics:
+- Color tones MUST match natural family
+- Surface finish MUST be: polished
+- Natural stone veining and pattern flow appropriate for ${st}
+- Realistic lighting and reflections on the surface based on lighting in the image
+- Proper perspective and depth for horizontal plane
+- Seamless edges where surface meets walls or backsplash
+- Authentic shadows from objects on the surface
+- Texture scale at 1.0x for realistic material representation
+- Consistent ${slabName} appearance across entire selected surface
+
+Material adjustments: Brightness: increase or decrease brightness to give most realistic image, Contrast: increase or decrease contrast to give most realistic imnage, Scale: Scale the image by whatever necessary to give most realistic image.
+
+REMINDER: The user specifically selected ${slabName} - apply ONLY this exact material to the masked surface, do not use similar texture alternatives.`;
   
   const negativePrompt = "different texture, wrong colors, wrong patterns, artificial, fake, plastic, laminate, blurry, low quality, distorted, cartoon, painting, illustration, watermark, text, deformed, bad lighting, flat, unrealistic";
 
