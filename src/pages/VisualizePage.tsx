@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase';
 import type { Slab } from '../types';
 import { SLAB_TYPES } from '../types';
 import { ComparisonSlider } from '../components/visualization/ComparisonSlider';
+import { MaskPainter } from '../components/visualization/MaskPainter';
 import './VisualizePage.css';
 
 export function VisualizePage() {
@@ -10,9 +11,7 @@ export function VisualizePage() {
   const [selectedSlab, setSelectedSlab] = useState<Slab | null>(null);
   const [referenceImage, setReferenceImage] = useState<File | null>(null);
   const [referencePreview, setReferencePreview] = useState<string>('');
-  const [detectedMask, setDetectedMask] = useState<string>('');
-  const [detecting, setDetecting] = useState(false);
-  const [detectionError, setDetectionError] = useState<string>('');
+  const [maskDataUrl, setMaskDataUrl] = useState<string>('');
   const [projectName, setProjectName] = useState('');
   const [generating, setGenerating] = useState(false);
   const [result, setResult] = useState<{
@@ -31,7 +30,7 @@ export function VisualizePage() {
         .from('slabs')
         .select('*')
         .eq('is_active', true)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false});
 
       if (error) throw error;
       setSlabs(data || []);
@@ -40,93 +39,16 @@ export function VisualizePage() {
     }
   };
 
-  const handleReferenceImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleReferenceImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       setReferenceImage(file);
-      setDetectedMask('');
-      setDetectionError('');
+      setMaskDataUrl('');
       const reader = new FileReader();
       reader.onloadend = () => {
         setReferencePreview(reader.result as string);
       };
       reader.readAsDataURL(file);
-
-      // Auto-detect countertop
-      await detectCountertop(file);
-    }
-  };
-
-  const detectCountertop = async (file: File) => {
-    setDetecting(true);
-    setDetectionError('');
-    
-    try {
-      console.log('Uploading image for detection...');
-      
-      // Upload image first
-      const fileName = `public/${Date.now()}-detect.${file.name.split('.').pop()}`;
-      const { error: uploadError } = await supabase.storage
-        .from('project-images')
-        .upload(fileName, file);
-
-      if (uploadError) {
-        console.error('Upload error:', uploadError);
-        throw new Error(`Upload failed: ${uploadError.message}`);
-      }
-
-      const { data: { publicUrl } } = supabase.storage
-        .from('project-images')
-        .getPublicUrl(fileName);
-
-      console.log('Image uploaded, detecting countertop with SAM...');
-      console.log('Image URL:', publicUrl);
-
-      const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-visualization`;
-
-      const response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          action: 'detect',
-          imageUrl: publicUrl,
-        }),
-      });
-
-      const responseText = await response.text();
-      console.log('Detection response status:', response.status);
-      console.log('Detection response:', responseText.substring(0, 500));
-
-      if (!response.ok) {
-        let errorMsg = 'Detection failed';
-        try {
-          const errorData = JSON.parse(responseText);
-          errorMsg = errorData.error || errorData.details || responseText;
-        } catch {
-          errorMsg = responseText;
-        }
-        throw new Error(errorMsg);
-      }
-
-      const data = JSON.parse(responseText);
-      
-      if (!data.maskUrl) {
-        throw new Error('No mask URL in response');
-      }
-
-      setDetectedMask(data.maskUrl);
-      console.log('Countertop detected successfully!');
-
-    } catch (error) {
-      console.error('Error detecting countertop:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      setDetectionError(`Detection failed: ${errorMessage}. Please check Edge Function logs.`);
-      alert(`Could not auto-detect countertop: ${errorMessage}\n\nCheck Supabase Edge Function logs for details.`);
-    } finally {
-      setDetecting(false);
     }
   };
 
@@ -136,14 +58,15 @@ export function VisualizePage() {
       return;
     }
 
-    if (!detectedMask) {
-      alert('Please wait for countertop detection to complete, or upload a different photo.');
+    if (!maskDataUrl) {
+      alert('Please paint over the countertop areas before generating.');
       return;
     }
 
     setGenerating(true);
 
     try {
+      // Upload reference image
       const fileExt = referenceImage.name.split('.').pop();
       const fileName = `public/${Date.now()}-reference.${fileExt}`;
 
@@ -157,6 +80,21 @@ export function VisualizePage() {
         .from('project-images')
         .getPublicUrl(fileName);
 
+      // Upload mask
+      const maskBlob = await (await fetch(maskDataUrl)).blob();
+      const maskFileName = `public/${Date.now()}-mask.png`;
+      
+      const { error: maskUploadError } = await supabase.storage
+        .from('project-images')
+        .upload(maskFileName, maskBlob);
+
+      if (maskUploadError) throw maskUploadError;
+
+      const { data: { publicUrl: maskUrl } } = supabase.storage
+        .from('project-images')
+        .getPublicUrl(maskFileName);
+
+      // Create project
       const { data: project, error: projectError } = await supabase
         .from('projects')
         .insert({
@@ -182,11 +120,10 @@ export function VisualizePage() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          action: 'apply',
           projectId: project.id,
           imageUrl: publicUrl,
           slabImageUrl: selectedSlab.image_url,
-          maskUrl: detectedMask,
+          maskUrl: maskUrl,
           slabName: selectedSlab.name,
           slabType: selectedSlab.type,
         }),
@@ -204,7 +141,7 @@ export function VisualizePage() {
         .from('projects')
         .update({
           result_image_url: resultUrl,
-          prompt_used: `Auto-detected + AI: ${selectedSlab.name}`,
+          prompt_used: `AI Inpainting: ${selectedSlab.name}`,
           status: 'completed',
         })
         .eq('id', project.id);
@@ -218,7 +155,8 @@ export function VisualizePage() {
 
     } catch (error) {
       console.error('Error generating visualization:', error);
-      alert('Error generating visualization. Check Edge Function logs.');
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      alert(`Error: ${errorMessage}. Check Edge Function logs.`);
     } finally {
       setGenerating(false);
     }
@@ -228,8 +166,7 @@ export function VisualizePage() {
     setSelectedSlab(null);
     setReferenceImage(null);
     setReferencePreview('');
-    setDetectedMask('');
-    setDetectionError('');
+    setMaskDataUrl('');
     setProjectName('');
     setResult(null);
   };
@@ -308,7 +245,7 @@ export function VisualizePage() {
           </div>
 
           <div className="visualize-section">
-            <h2>2. Upload Kitchen Photo</h2>
+            <h2>2. Upload &amp; Paint Countertops</h2>
 
             {!referencePreview ? (
               <div className="upload-area">
@@ -333,85 +270,32 @@ export function VisualizePage() {
                       <line x1="12" y1="3" x2="12" y2="15" />
                     </svg>
                     <p>Click to upload kitchen or interior photo</p>
-                    <span>AI will auto-detect countertops</span>
+                    <span>PNG, JPG up to 10MB</span>
                   </div>
                 </label>
               </div>
             ) : (
-              <div>
-                <div className="preview-container" style={{ position: 'relative', marginBottom: 'var(--spacing-md)' }}>
-                  <img src={referencePreview} alt="Reference" style={{ width: '100%', borderRadius: 'var(--radius-lg)', border: '2px solid var(--color-border)' }} />
-                  {detecting && (
-                    <div style={{
-                      position: 'absolute',
-                      top: 0,
-                      left: 0,
-                      right: 0,
-                      bottom: 0,
-                      background: 'rgba(0,0,0,0.7)',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      borderRadius: 'var(--radius-lg)',
-                      color: 'white'
-                    }}>
-                      <span className="loading" style={{ marginBottom: 'var(--spacing-md)' }} />
-                      <p style={{ fontSize: '1.1rem', fontWeight: 600 }}>AI detecting countertops...</p>
-                      <p style={{ fontSize: '0.9rem', marginTop: '0.5rem', opacity: 0.8 }}>This may take 10-20 seconds</p>
-                    </div>
-                  )}
-                  {detectedMask && !detecting && (
-                    <div style={{
-                      position: 'absolute',
-                      top: 'var(--spacing-sm)',
-                      right: 'var(--spacing-sm)',
-                      background: 'var(--color-success)',
-                      color: 'white',
-                      padding: '0.5rem 1rem',
-                      borderRadius: 'var(--radius-md)',
-                      fontSize: '0.875rem',
-                      fontWeight: 600
-                    }}>
-                      ✓ Countertop Detected
-                    </div>
-                  )}
-                  {detectionError && !detecting && (
-                    <div style={{
-                      position: 'absolute',
-                      top: 'var(--spacing-sm)',
-                      right: 'var(--spacing-sm)',
-                      background: 'var(--color-danger)',
-                      color: 'white',
-                      padding: '0.5rem 1rem',
-                      borderRadius: 'var(--radius-md)',
-                      fontSize: '0.875rem',
-                      fontWeight: 600
-                    }}>
-                      ✗ Detection Failed
-                    </div>
-                  )}
-                </div>
-                <button
-                  className="btn btn-sm btn-secondary"
-                  onClick={() => {
-                    setReferenceImage(null);
-                    setReferencePreview('');
-                    setDetectedMask('');
-                    setDetectionError('');
-                  }}
-                >
-                  Change Photo
-                </button>
-                {detectionError && (
-                  <div style={{ marginTop: 'var(--spacing-sm)', padding: 'var(--spacing-sm)', background: 'rgba(255,0,0,0.1)', borderRadius: 'var(--radius-md)', fontSize: '0.85rem', color: 'var(--color-danger)' }}>
-                    {detectionError}
-                  </div>
-                )}
-              </div>
+              <MaskPainter
+                imageUrl={referencePreview}
+                onMaskChange={setMaskDataUrl}
+              />
             )}
 
-            <div className="form-group" style={{ marginTop: 'var(--spacing-lg)' }}>
+            {referencePreview && (
+              <button
+                className="btn btn-sm btn-secondary"
+                style={{ marginBottom: 'var(--spacing-md)' }}
+                onClick={() => {
+                  setReferenceImage(null);
+                  setReferencePreview('');
+                  setMaskDataUrl('');
+                }}
+              >
+                Change Photo
+              </button>
+            )}
+
+            <div className="form-group">
               <label>Project Name</label>
               <input
                 type="text"
@@ -425,21 +309,21 @@ export function VisualizePage() {
             <button
               className="btn btn-primary btn-lg generate-btn"
               onClick={handleGenerate}
-              disabled={!selectedSlab || !referenceImage || !projectName.trim() || !detectedMask || detecting || generating}
+              disabled={!selectedSlab || !referenceImage || !projectName.trim() || !maskDataUrl || generating}
             >
               {generating ? (
                 <>
                   <span className="loading" />
-                  Applying slab texture...
+                  Generating visualization...
                 </>
               ) : (
                 'Generate Visualization'
               )}
             </button>
 
-            {referencePreview && !detectedMask && !detecting && !detectionError && (
+            {referencePreview && !maskDataUrl && (
               <p style={{ fontSize: '0.8rem', color: 'var(--color-warning)', textAlign: 'center', marginTop: 'var(--spacing-sm)' }}>
-                ⚠️ Waiting for AI to detect countertop...
+                ⚠️ Paint the countertops before generating
               </p>
             )}
           </div>
