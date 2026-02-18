@@ -122,7 +122,7 @@ export function VisualizePage() {
 
     } catch (error) {
       console.error('Error detecting countertop:', error);
-      const errorMessage = error.message || 'Unknown error';
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       setDetectionError(`Detection failed: ${errorMessage}. Please check Edge Function logs.`);
       alert(`Could not auto-detect countertop: ${errorMessage}\n\nCheck Supabase Edge Function logs for details.`);
     } finally {
