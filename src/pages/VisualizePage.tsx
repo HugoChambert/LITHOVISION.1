@@ -12,6 +12,7 @@ export function VisualizePage() {
   const [referencePreview, setReferencePreview] = useState<string>('');
   const [detectedMask, setDetectedMask] = useState<string>('');
   const [detecting, setDetecting] = useState(false);
+  const [detectionError, setDetectionError] = useState<string>('');
   const [projectName, setProjectName] = useState('');
   const [generating, setGenerating] = useState(false);
   const [result, setResult] = useState<{
@@ -44,6 +45,7 @@ export function VisualizePage() {
     if (file) {
       setReferenceImage(file);
       setDetectedMask('');
+      setDetectionError('');
       const reader = new FileReader();
       reader.onloadend = () => {
         setReferencePreview(reader.result as string);
@@ -57,20 +59,28 @@ export function VisualizePage() {
 
   const detectCountertop = async (file: File) => {
     setDetecting(true);
+    setDetectionError('');
+    
     try {
+      console.log('Uploading image for detection...');
+      
       // Upload image first
       const fileName = `public/${Date.now()}-detect.${file.name.split('.').pop()}`;
       const { error: uploadError } = await supabase.storage
         .from('project-images')
         .upload(fileName, file);
 
-      if (uploadError) throw uploadError;
+      if (uploadError) {
+        console.error('Upload error:', uploadError);
+        throw new Error(`Upload failed: ${uploadError.message}`);
+      }
 
       const { data: { publicUrl } } = supabase.storage
         .from('project-images')
         .getPublicUrl(fileName);
 
-      console.log('Detecting countertop with AI...');
+      console.log('Image uploaded, detecting countertop with SAM...');
+      console.log('Image URL:', publicUrl);
 
       const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-visualization`;
 
@@ -86,17 +96,35 @@ export function VisualizePage() {
         }),
       });
 
+      const responseText = await response.text();
+      console.log('Detection response status:', response.status);
+      console.log('Detection response:', responseText.substring(0, 500));
+
       if (!response.ok) {
-        throw new Error('Failed to detect countertop');
+        let errorMsg = 'Detection failed';
+        try {
+          const errorData = JSON.parse(responseText);
+          errorMsg = errorData.error || errorData.details || responseText;
+        } catch {
+          errorMsg = responseText;
+        }
+        throw new Error(errorMsg);
       }
 
-      const { maskUrl } = await response.json();
-      setDetectedMask(maskUrl);
-      console.log('Countertop detected!');
+      const data = JSON.parse(responseText);
+      
+      if (!data.maskUrl) {
+        throw new Error('No mask URL in response');
+      }
+
+      setDetectedMask(data.maskUrl);
+      console.log('Countertop detected successfully!');
 
     } catch (error) {
       console.error('Error detecting countertop:', error);
-      alert('Could not auto-detect countertop. Please try a clearer photo or contact support.');
+      const errorMessage = error.message || 'Unknown error';
+      setDetectionError(`Detection failed: ${errorMessage}. Please check Edge Function logs.`);
+      alert(`Could not auto-detect countertop: ${errorMessage}\n\nCheck Supabase Edge Function logs for details.`);
     } finally {
       setDetecting(false);
     }
@@ -109,7 +137,7 @@ export function VisualizePage() {
     }
 
     if (!detectedMask) {
-      alert('Please wait for countertop detection to complete.');
+      alert('Please wait for countertop detection to complete, or upload a different photo.');
       return;
     }
 
@@ -143,7 +171,7 @@ export function VisualizePage() {
 
       if (projectError) throw projectError;
 
-      console.log('Applying slab texture with realistic lighting...');
+      console.log('Applying slab texture...');
 
       const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-visualization`;
 
@@ -165,6 +193,8 @@ export function VisualizePage() {
       });
 
       if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Generation error:', errorText);
         throw new Error('Failed to generate visualization');
       }
 
@@ -174,7 +204,7 @@ export function VisualizePage() {
         .from('projects')
         .update({
           result_image_url: resultUrl,
-          prompt_used: `Auto-detected + ControlNet: ${selectedSlab.name}`,
+          prompt_used: `Auto-detected + AI: ${selectedSlab.name}`,
           status: 'completed',
         })
         .eq('id', project.id);
@@ -188,7 +218,7 @@ export function VisualizePage() {
 
     } catch (error) {
       console.error('Error generating visualization:', error);
-      alert('Error generating visualization. Please try again.');
+      alert('Error generating visualization. Check Edge Function logs.');
     } finally {
       setGenerating(false);
     }
@@ -199,6 +229,7 @@ export function VisualizePage() {
     setReferenceImage(null);
     setReferencePreview('');
     setDetectedMask('');
+    setDetectionError('');
     setProjectName('');
     setResult(null);
   };
@@ -309,7 +340,7 @@ export function VisualizePage() {
             ) : (
               <div>
                 <div className="preview-container" style={{ position: 'relative', marginBottom: 'var(--spacing-md)' }}>
-                  <img src={referencePreview} alt="Reference" style={{ width: '100%', borderRadius: 'var(--radius-lg)' }} />
+                  <img src={referencePreview} alt="Reference" style={{ width: '100%', borderRadius: 'var(--radius-lg)', border: '2px solid var(--color-border)' }} />
                   {detecting && (
                     <div style={{
                       position: 'absolute',
@@ -326,7 +357,8 @@ export function VisualizePage() {
                       color: 'white'
                     }}>
                       <span className="loading" style={{ marginBottom: 'var(--spacing-md)' }} />
-                      <p>AI detecting countertops...</p>
+                      <p style={{ fontSize: '1.1rem', fontWeight: 600 }}>AI detecting countertops...</p>
+                      <p style={{ fontSize: '0.9rem', marginTop: '0.5rem', opacity: 0.8 }}>This may take 10-20 seconds</p>
                     </div>
                   )}
                   {detectedMask && !detecting && (
@@ -344,6 +376,21 @@ export function VisualizePage() {
                       ✓ Countertop Detected
                     </div>
                   )}
+                  {detectionError && !detecting && (
+                    <div style={{
+                      position: 'absolute',
+                      top: 'var(--spacing-sm)',
+                      right: 'var(--spacing-sm)',
+                      background: 'var(--color-danger)',
+                      color: 'white',
+                      padding: '0.5rem 1rem',
+                      borderRadius: 'var(--radius-md)',
+                      fontSize: '0.875rem',
+                      fontWeight: 600
+                    }}>
+                      ✗ Detection Failed
+                    </div>
+                  )}
                 </div>
                 <button
                   className="btn btn-sm btn-secondary"
@@ -351,10 +398,16 @@ export function VisualizePage() {
                     setReferenceImage(null);
                     setReferencePreview('');
                     setDetectedMask('');
+                    setDetectionError('');
                   }}
                 >
                   Change Photo
                 </button>
+                {detectionError && (
+                  <div style={{ marginTop: 'var(--spacing-sm)', padding: 'var(--spacing-sm)', background: 'rgba(255,0,0,0.1)', borderRadius: 'var(--radius-md)', fontSize: '0.85rem', color: 'var(--color-danger)' }}>
+                    {detectionError}
+                  </div>
+                )}
               </div>
             )}
 
@@ -377,14 +430,14 @@ export function VisualizePage() {
               {generating ? (
                 <>
                   <span className="loading" />
-                  Applying slab with realistic lighting...
+                  Applying slab texture...
                 </>
               ) : (
                 'Generate Visualization'
               )}
             </button>
 
-            {referencePreview && !detectedMask && !detecting && (
+            {referencePreview && !detectedMask && !detecting && !detectionError && (
               <p style={{ fontSize: '0.8rem', color: 'var(--color-warning)', textAlign: 'center', marginTop: 'var(--spacing-sm)' }}>
                 ⚠️ Waiting for AI to detect countertop...
               </p>
