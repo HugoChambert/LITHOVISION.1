@@ -109,30 +109,28 @@ async function applyTexture(body: ApplyRequest, apiKey: string) {
   console.log("Slab:", slabName, slabType);
 
   // Use ControlNet Tile to apply the exact slab texture with realistic lighting
-  const prompt = `CRITICAL: Apply EXACTLY ${slabName} ${slabType} material to the horizontal surface.
+  const prompt = `Replace the masked horizontal surface at ${maskurl} (kitchen countertop, bathroom vanity, island, or similar flat countertop surface) with ${slabName} ${slabType}.
 
-SELECTED STONE SPECIFICATIONS (USE EXACTLY THESE):
-- Material Name: ${slabType}
-- Stone Type: ${slabType}
+Use authentic ${slabType} stone with natural color tones consistent with real-world slabs from this material family.
+Surface finish must be polished.
 
-SURFACE CONTEXT:
-The selected area is a horizontal surface (kitchen countertop, bathroom vanity, dining table, or similar flat surface). Automatically recognize the surface type by the red mask and apply the EXACT stone material specified above.
+The material must be applied correctly to a horizontal countertop surface with proper depth, edge realism, and accurate slab scale.
 
-RENDERING REQUIREMENTS:
-Must apply ${slabName} with these exact characteristics:
-- Color tones MUST match natural family
-- Surface finish MUST be: polished
-- Natural stone veining and pattern flow appropriate for ${st}
-- Realistic lighting and reflections on the surface based on lighting in the image
-- Proper perspective and depth for horizontal plane
-- Seamless edges where surface meets walls or backsplash
-- Authentic shadows from objects on the surface
-- Texture scale at 1.0x for realistic material representation
-- Consistent ${slabName} appearance across entire selected surface
+Ensure:
+- Natural stone veining and pattern flow appropriate for ${slabType}, flowing realistically across the full surface
+- Correct 1:1 material scale suitable for kitchen and bathroom countertops
+- High-resolution texture detail with subtle natural micro-variation
+- Accurate polished reflections based on the existing scene lighting
+- Proper horizontal perspective and depth alignment
+- Realistic slab thickness at exposed edges
+- Seamless transitions where the surface meets backsplash, sinks, faucets, or cabinetry
+- Authentic shadows from objects naturally falling across the countertop
 
-Material adjustments: Brightness: increase or decrease brightness to give most realistic image, Contrast: increase or decrease contrast to give most realistic imnage, Scale: Scale the image by whatever necessary to give most realistic image.
+Maintain the existing room, cabinetry, walls, lighting, fixtures, and objects exactly as they are.
+Do not alter anything outside the masked area. 
 
-REMINDER: The user specifically selected ${slabName} - apply ONLY this exact material to the masked surface, do not use similar texture alternatives.`;
+Render in full color, photorealistic quality, high resolution.
+`;
   
   const negativePrompt = "different texture, wrong colors, wrong patterns, artificial, fake, plastic, laminate, blurry, low quality, distorted, cartoon, painting, illustration, watermark, text, deformed, bad lighting, flat, unrealistic";
 
