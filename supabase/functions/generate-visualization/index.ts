@@ -69,7 +69,27 @@ async function detectCountertop(imageUrl: string, apiKey: string) {
       version: "18cf84e062ec28b5b1b0a78f2a5e1d4e738acd8a9c7479c38e01237d5a21af63",
       input: {
         image: imageUrl,
-        prompt: "countertop, kitchen counter, counter surface",
+        prompt: `Replace the masked horizontal surface at ${maskurl} (kitchen countertop, bathroom vanity, island, or similar flat countertop surface) with ${slabName} ${slabType}.
+
+Use authentic ${slabType} stone with natural color tones consistent with real-world slabs from this material family.
+Surface finish must be polished.
+
+The material must be applied correctly to a horizontal countertop surface with proper depth, edge realism, and accurate slab scale.
+
+Ensure:
+- Natural stone veining and pattern flow appropriate for ${slabType}, flowing realistically across the full surface
+- Correct 1:1 material scale suitable for kitchen and bathroom countertops
+- High-resolution texture detail with subtle natural micro-variation
+- Accurate polished reflections based on the existing scene lighting
+- Proper horizontal perspective and depth alignment
+- Realistic slab thickness at exposed edges
+- Seamless transitions where the surface meets backsplash, sinks, faucets, or cabinetry
+- Authentic shadows from objects naturally falling across the countertop
+
+Maintain the existing room, cabinetry, walls, lighting, fixtures, and objects exactly as they are.
+Do not alter anything outside the masked area. 
+
+Render in full color, photorealistic quality, high resolution.`,
         box_threshold: 0.3,
         text_threshold: 0.25,
       },
