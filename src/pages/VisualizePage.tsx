@@ -3,7 +3,6 @@ import { supabase } from '../lib/supabase';
 import type { Slab } from '../types';
 import { SLAB_TYPES } from '../types';
 import { ComparisonSlider } from '../components/visualization/ComparisonSlider';
-import { MaskPainter } from '../components/visualization/MaskPainter';
 import './VisualizePage.css';
 
 export function VisualizePage() {
@@ -11,7 +10,8 @@ export function VisualizePage() {
   const [selectedSlab, setSelectedSlab] = useState<Slab | null>(null);
   const [referenceImage, setReferenceImage] = useState<File | null>(null);
   const [referencePreview, setReferencePreview] = useState<string>('');
-  const [maskDataUrl, setMaskDataUrl] = useState<string>('');
+  const [detectedMask, setDetectedMask] = useState<string>('');
+  const [detecting, setDetecting] = useState(false);
   const [projectName, setProjectName] = useState('');
   const [generating, setGenerating] = useState(false);
   const [result, setResult] = useState<{
@@ -39,111 +39,67 @@ export function VisualizePage() {
     }
   };
 
-  const handleReferenceImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleReferenceImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       setReferenceImage(file);
-      setMaskDataUrl('');
+      setDetectedMask('');
       const reader = new FileReader();
       reader.onloadend = () => {
         setReferencePreview(reader.result as string);
       };
       reader.readAsDataURL(file);
+
+      // Auto-detect countertop
+      await detectCountertop(file);
     }
   };
 
-  // Composite the slab image onto the masked area
-  const compositeSlab = async (
-    referenceImgUrl: string,
-    slabImgUrl: string,
-    maskUrl: string
-  ): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return reject('Canvas context not available');
+  const detectCountertop = async (file: File) => {
+    setDetecting(true);
+    try {
+      // Upload image first
+      const fileName = `public/${Date.now()}-detect.${file.name.split('.').pop()}`;
+      const { error: uploadError } = await supabase.storage
+        .from('project-images')
+        .upload(fileName, file);
 
-      const refImg = new Image();
-      refImg.crossOrigin = 'anonymous';
-      
-      refImg.onload = () => {
-        canvas.width = refImg.width;
-        canvas.height = refImg.height;
-        
-        // Draw original image
-        ctx.drawImage(refImg, 0, 0);
-        
-        const slabImg = new Image();
-        slabImg.crossOrigin = 'anonymous';
-        
-        slabImg.onload = () => {
-          const maskImg = new Image();
-          
-          maskImg.onload = () => {
-            // Create pattern from slab image
-            const pattern = ctx.createPattern(slabImg, 'repeat');
-            if (!pattern) return reject('Pattern creation failed');
-            
-            // Get mask data to know where to paint
-            const maskCanvas = document.createElement('canvas');
-            maskCanvas.width = canvas.width;
-            maskCanvas.height = canvas.height;
-            const maskCtx = maskCanvas.getContext('2d');
-            if (!maskCtx) return reject('Mask context failed');
-            
-            maskCtx.drawImage(maskImg, 0, 0, canvas.width, canvas.height);
-            const maskData = maskCtx.getImageData(0, 0, canvas.width, canvas.height);
-            
-            // Draw slab texture where mask is white
-            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-            
-            // Scale slab to a reasonable tile size
-            const tileCanvas = document.createElement('canvas');
-            const tileSize = Math.min(canvas.width, canvas.height) / 3; // Adjust scale
-            tileCanvas.width = tileSize;
-            tileCanvas.height = tileSize;
-            const tileCtx = tileCanvas.getContext('2d');
-            if (!tileCtx) return reject('Tile context failed');
-            
-            tileCtx.drawImage(slabImg, 0, 0, tileSize, tileSize);
-            const tileData = tileCtx.getImageData(0, 0, tileSize, tileSize);
-            
-            // Apply slab texture where mask is white
-            for (let y = 0; y < canvas.height; y++) {
-              for (let x = 0; x < canvas.width; x++) {
-                const idx = (y * canvas.width + x) * 4;
-                
-                // Check if mask is white at this pixel (painted area)
-                if (maskData.data[idx] > 128) {
-                  // Get corresponding pixel from tiled slab
-                  const tileX = x % tileSize;
-                  const tileY = y % tileSize;
-                  const tileIdx = (tileY * tileSize + tileX) * 4;
-                  
-                  // Copy slab pixel color
-                  imageData.data[idx] = tileData.data[tileIdx];
-                  imageData.data[idx + 1] = tileData.data[tileIdx + 1];
-                  imageData.data[idx + 2] = tileData.data[tileIdx + 2];
-                  imageData.data[idx + 3] = 255;
-                }
-              }
-            }
-            
-            ctx.putImageData(imageData, 0, 0);
-            resolve(canvas.toDataURL('image/jpeg', 0.95));
-          };
-          
-          maskImg.onerror = () => reject('Mask image load failed');
-          maskImg.src = maskUrl;
-        };
-        
-        slabImg.onerror = () => reject('Slab image load failed');
-        slabImg.src = slabImgUrl;
-      };
-      
-      refImg.onerror = () => reject('Reference image load failed');
-      refImg.src = referenceImgUrl;
-    });
+      if (uploadError) throw uploadError;
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('project-images')
+        .getPublicUrl(fileName);
+
+      console.log('Detecting countertop with AI...');
+
+      const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-visualization`;
+
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          action: 'detect',
+          imageUrl: publicUrl,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to detect countertop');
+      }
+
+      const { maskUrl } = await response.json();
+      setDetectedMask(maskUrl);
+      console.log('Countertop detected!');
+
+    } catch (error) {
+      console.error('Error detecting countertop:', error);
+      alert('Could not auto-detect countertop. Please try a clearer photo or contact support.');
+    } finally {
+      setDetecting(false);
+    }
   };
 
   const handleGenerate = async () => {
@@ -152,8 +108,8 @@ export function VisualizePage() {
       return;
     }
 
-    if (!maskDataUrl) {
-      alert('Please paint over the countertop areas before generating.');
+    if (!detectedMask) {
+      alert('Please wait for countertop detection to complete.');
       return;
     }
 
@@ -173,29 +129,6 @@ export function VisualizePage() {
         .from('project-images')
         .getPublicUrl(fileName);
 
-      console.log('Compositing slab onto image...');
-      
-      // Step 1: Composite slab onto masked area
-      const compositedDataUrl = await compositeSlab(
-        referencePreview,
-        selectedSlab.image_url,
-        maskDataUrl
-      );
-
-      // Upload composited image
-      const compositedBlob = await (await fetch(compositedDataUrl)).blob();
-      const compositedFileName = `public/${Date.now()}-composited.jpg`;
-      
-      const { error: compositedUploadError } = await supabase.storage
-        .from('project-images')
-        .upload(compositedFileName, compositedBlob);
-
-      if (compositedUploadError) throw compositedUploadError;
-
-      const { data: { publicUrl: compositedUrl } } = supabase.storage
-        .from('project-images')
-        .getPublicUrl(compositedFileName);
-
       const { data: project, error: projectError } = await supabase
         .from('projects')
         .insert({
@@ -210,11 +143,7 @@ export function VisualizePage() {
 
       if (projectError) throw projectError;
 
-      const slabType = SLAB_TYPES.find((t) => t.value === selectedSlab.type);
-      const visualDesc = (selectedSlab as any).visual_description || slabType?.prompt || '';
-      const prompt = `Refine lighting and shadows for ${selectedSlab.name} ${selectedSlab.type} countertop. ${visualDesc}`;
-
-      console.log('Sending to AI for lighting refinement...');
+      console.log('Applying slab texture with realistic lighting...');
 
       const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-visualization`;
 
@@ -225,9 +154,13 @@ export function VisualizePage() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
+          action: 'apply',
           projectId: project.id,
-          compositedImageUrl: compositedUrl,
-          prompt: prompt,
+          imageUrl: publicUrl,
+          slabImageUrl: selectedSlab.image_url,
+          maskUrl: detectedMask,
+          slabName: selectedSlab.name,
+          slabType: selectedSlab.type,
         }),
       });
 
@@ -241,7 +174,7 @@ export function VisualizePage() {
         .from('projects')
         .update({
           result_image_url: resultUrl,
-          prompt_used: prompt,
+          prompt_used: `Auto-detected + ControlNet: ${selectedSlab.name}`,
           status: 'completed',
         })
         .eq('id', project.id);
@@ -250,6 +183,9 @@ export function VisualizePage() {
         originalUrl: publicUrl,
         generatedUrl: resultUrl,
       });
+
+      console.log('Generation complete!');
+
     } catch (error) {
       console.error('Error generating visualization:', error);
       alert('Error generating visualization. Please try again.');
@@ -262,7 +198,7 @@ export function VisualizePage() {
     setSelectedSlab(null);
     setReferenceImage(null);
     setReferencePreview('');
-    setMaskDataUrl('');
+    setDetectedMask('');
     setProjectName('');
     setResult(null);
   };
@@ -341,7 +277,7 @@ export function VisualizePage() {
           </div>
 
           <div className="visualize-section">
-            <h2>2. Upload &amp; Paint Countertops</h2>
+            <h2>2. Upload Kitchen Photo</h2>
 
             {!referencePreview ? (
               <div className="upload-area">
@@ -366,32 +302,63 @@ export function VisualizePage() {
                       <line x1="12" y1="3" x2="12" y2="15" />
                     </svg>
                     <p>Click to upload kitchen or interior photo</p>
-                    <span>PNG, JPG up to 10MB</span>
+                    <span>AI will auto-detect countertops</span>
                   </div>
                 </label>
               </div>
             ) : (
-              <MaskPainter
-                imageUrl={referencePreview}
-                onMaskChange={setMaskDataUrl}
-              />
+              <div>
+                <div className="preview-container" style={{ position: 'relative', marginBottom: 'var(--spacing-md)' }}>
+                  <img src={referencePreview} alt="Reference" style={{ width: '100%', borderRadius: 'var(--radius-lg)' }} />
+                  {detecting && (
+                    <div style={{
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      background: 'rgba(0,0,0,0.7)',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      borderRadius: 'var(--radius-lg)',
+                      color: 'white'
+                    }}>
+                      <span className="loading" style={{ marginBottom: 'var(--spacing-md)' }} />
+                      <p>AI detecting countertops...</p>
+                    </div>
+                  )}
+                  {detectedMask && !detecting && (
+                    <div style={{
+                      position: 'absolute',
+                      top: 'var(--spacing-sm)',
+                      right: 'var(--spacing-sm)',
+                      background: 'var(--color-success)',
+                      color: 'white',
+                      padding: '0.5rem 1rem',
+                      borderRadius: 'var(--radius-md)',
+                      fontSize: '0.875rem',
+                      fontWeight: 600
+                    }}>
+                      ✓ Countertop Detected
+                    </div>
+                  )}
+                </div>
+                <button
+                  className="btn btn-sm btn-secondary"
+                  onClick={() => {
+                    setReferenceImage(null);
+                    setReferencePreview('');
+                    setDetectedMask('');
+                  }}
+                >
+                  Change Photo
+                </button>
+              </div>
             )}
 
-            {referencePreview && (
-              <button
-                className="btn btn-sm btn-secondary"
-                style={{ marginBottom: 'var(--spacing-md)' }}
-                onClick={() => {
-                  setReferenceImage(null);
-                  setReferencePreview('');
-                  setMaskDataUrl('');
-                }}
-              >
-                Change Photo
-              </button>
-            )}
-
-            <div className="form-group">
+            <div className="form-group" style={{ marginTop: 'var(--spacing-lg)' }}>
               <label>Project Name</label>
               <input
                 type="text"
@@ -405,21 +372,21 @@ export function VisualizePage() {
             <button
               className="btn btn-primary btn-lg generate-btn"
               onClick={handleGenerate}
-              disabled={!selectedSlab || !referenceImage || !projectName.trim() || !maskDataUrl || generating}
+              disabled={!selectedSlab || !referenceImage || !projectName.trim() || !detectedMask || detecting || generating}
             >
               {generating ? (
                 <>
                   <span className="loading" />
-                  Generating with exact slab...
+                  Applying slab with realistic lighting...
                 </>
               ) : (
                 'Generate Visualization'
               )}
             </button>
 
-            {referencePreview && !maskDataUrl && (
+            {referencePreview && !detectedMask && !detecting && (
               <p style={{ fontSize: '0.8rem', color: 'var(--color-warning)', textAlign: 'center', marginTop: 'var(--spacing-sm)' }}>
-                ⚠️ Paint the countertops before generating
+                ⚠️ Waiting for AI to detect countertop...
               </p>
             )}
           </div>
