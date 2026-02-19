@@ -130,10 +130,30 @@ export function VisualizePage() {
     ctx.putImageData(imageData, 0, 0);
     console.log('Exact slab texture applied!');
 
+    // Resize to max 1024px to avoid GPU memory issues
+    const maxSize = 1024;
+    let finalCanvas = canvas;
+    
+    if (canvas.width > maxSize || canvas.height > maxSize) {
+      console.log(`Resizing from ${canvas.width}x${canvas.height} to fit ${maxSize}px`);
+      const scale = Math.min(maxSize / canvas.width, maxSize / canvas.height);
+      const newWidth = Math.floor(canvas.width * scale);
+      const newHeight = Math.floor(canvas.height * scale);
+      
+      finalCanvas = document.createElement('canvas');
+      finalCanvas.width = newWidth;
+      finalCanvas.height = newHeight;
+      const finalCtx = finalCanvas.getContext('2d');
+      if (finalCtx) {
+        finalCtx.drawImage(canvas, 0, 0, newWidth, newHeight);
+      }
+      console.log(`Resized to ${newWidth}x${newHeight}`);
+    }
+
     return new Promise((resolve) => {
-      canvas.toBlob((blob) => {
+      finalCanvas.toBlob((blob) => {
         if (blob) resolve(blob);
-      }, 'image/jpeg', 0.95);
+      }, 'image/jpeg', 0.92);
     });
   };
 
