@@ -1,18 +1,16 @@
 .header {
-  background-color: var(--color-bg);
-  border-bottom: 1px solid var(--color-border);
-  box-shadow: var(--shadow-sm);
   position: sticky;
   top: 0;
   z-index: 100;
+  transition: all 0.3s ease;
 }
 
 .header-content {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding-top: var(--spacing-md);
-  padding-bottom: var(--spacing-md);
+  padding-top: 0.625rem;
+  padding-bottom: 0.625rem;
   gap: var(--spacing-xl);
 }
 
@@ -27,7 +25,7 @@
 
 .header-logo h2 {
   color: var(--color-primary);
-  font-size: 1.5rem;
+  font-size: 1.25rem;
 }
 
 .header-nav {
@@ -64,6 +62,33 @@
 .user-email {
   font-size: 0.875rem;
   color: var(--color-text-secondary);
+}
+
+.theme-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  padding: 0;
+  background: rgba(99, 102, 241, 0.1);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md);
+  color: var(--color-primary);
+  transition: all 0.2s ease;
+}
+
+.theme-toggle:hover {
+  background: rgba(99, 102, 241, 0.2);
+  transform: scale(1.05);
+}
+
+.theme-toggle svg {
+  transition: transform 0.3s ease;
+}
+
+.theme-toggle:hover svg {
+  transform: rotate(20deg);
 }
 
 @media (max-width: 768px) {
