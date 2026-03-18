@@ -45,6 +45,7 @@ lithovision/
 │   └── functions/
 │       └── generate-visualization/  # AI visualization function
 ├── database-setup.sql         # Complete database schema
+├── API_SETUP_GUIDE.md        # Comprehensive API configuration guide
 ├── OPENAI_SETUP.md           # AI integration guide
 └── package.json
 
@@ -54,7 +55,9 @@ lithovision/
 
 - Node.js 18+ and npm
 - Supabase account
-- OpenAI API key (or Stable Diffusion API)
+- **Required API Keys**:
+  - OpenAI API key (for visualization generation)
+  - Replicate API key (for SAM2 segmentation)
 
 ### 2. Clone and Install
 
@@ -70,7 +73,7 @@ The `.env` file is already configured with Supabase credentials:
 
 ```env
 VITE_SUPABASE_URL=<your-supabase-url>
-VITE_SUPABASE_SUPABASE_ANON_KEY=<your-supabase-anon-key>
+VITE_SUPABASE_ANON_KEY=<your-supabase-anon-key>
 ```
 
 ### 4. Database Setup
@@ -96,26 +99,61 @@ To enable open access without authentication:
 
 This migration removes authentication requirements and makes all features publicly accessible.
 
-### 7. OpenAI Integration
+### 7. API Keys Configuration
 
-See `OPENAI_SETUP.md` for detailed instructions on:
-- Getting an OpenAI API key
-- Configuring the Edge Function
-- Alternative AI services (Stable Diffusion, etc.)
-- Cost considerations
+LITHOVISION requires two API keys for full functionality.
 
-To add your OpenAI API key:
-1. Go to Supabase Dashboard > Edge Functions
-2. Add secret: `OPENAI_API_KEY` = `sk-your-key`
+**📖 For detailed step-by-step instructions, see [API_SETUP_GUIDE.md](./API_SETUP_GUIDE.md)**
 
-### 8. Deploy Edge Function
+#### Quick Summary:
 
-If using Supabase CLI:
+**7.1 OpenAI API Key** (Required for Visualization)
+1. Get key from: https://platform.openai.com/api-keys
+2. Add to Supabase: **Project Settings > Edge Functions > Secrets**
+   - Name: `OPENAI_API_KEY`
+   - Value: `sk-...` (your key)
+
+**7.2 Replicate API Key** (Required for SAM2 Segmentation)
+1. Get token from: https://replicate.com/account/api-tokens
+2. Add to Supabase: **Project Settings > Edge Functions > Secrets**
+   - Name: `SAM_API_KEY`
+   - Value: `r8_...` (your token)
+
+**7.3 Verify Configuration**
+
+Check Supabase Dashboard > Edge Functions > Secrets shows:
+- ✅ `OPENAI_API_KEY`
+- ✅ `SAM_API_KEY`
+- ✅ `SUPABASE_URL` (auto-configured)
+- ✅ `SUPABASE_ANON_KEY` (auto-configured)
+- ✅ `SUPABASE_SERVICE_ROLE_KEY` (auto-configured)
+- ✅ `SUPABASE_DB_URL` (auto-configured)
+
+### 8. Deploy Edge Functions
+
+The application requires two Edge Functions to be deployed:
+
+#### 8.1 Deploy generate-visualization
+
+This function handles AI-powered visualization generation using OpenAI.
+
+**If using Supabase CLI:**
 ```bash
 supabase functions deploy generate-visualization
 ```
 
-Or manually upload the function via Supabase Dashboard.
+**Or manually:** Upload via Supabase Dashboard > Edge Functions
+
+#### 8.2 Deploy generate-sam-mask
+
+This function handles SAM2 segmentation for precise surface selection.
+
+**If using Supabase CLI:**
+```bash
+supabase functions deploy generate-sam-mask
+```
+
+**Or manually:** Upload via Supabase Dashboard > Edge Functions
 
 ### 9. Run Development Server
 
@@ -194,13 +232,36 @@ The app uses optimized prompts for each stone type:
 
 Note: This is ideal for demos, trade shows, kiosks, or internal deployments behind a firewall. For production use with multiple customers, consider adding authentication at the hosting level (HTTP Basic Auth, IP whitelisting, etc.).
 
-## API Integration Notes
+## API Integration Summary
 
-The current implementation provides a foundation for AI image generation. To enable full functionality:
+LITHOVISION integrates with two external AI services:
 
-1. **Add OpenAI API Key** to Supabase Edge Functions
-2. **Consider alternatives** like Stable Diffusion for better image-to-image results
-3. **See OPENAI_SETUP.md** for detailed integration options
+### OpenAI (Visualization Generation)
+- **Purpose:** Generates photorealistic countertop visualizations
+- **Model Used:** GPT-4 Vision or DALL-E 3
+- **API Documentation:** https://platform.openai.com/docs
+- **Get API Key:** https://platform.openai.com/api-keys
+- **Configure In:** Supabase Dashboard > Edge Functions > Secrets > `OPENAI_API_KEY`
+- **Alternative Options:** See `OPENAI_SETUP.md` for Stable Diffusion and other alternatives
+
+### Replicate (SAM2 Segmentation)
+- **Purpose:** AI-powered surface segmentation for precise countertop selection
+- **Model Used:** SAM2 (Segment Anything Model 2)
+- **Model URL:** https://replicate.com/meta/sam-2
+- **API Documentation:** https://replicate.com/docs
+- **Get API Key:** https://replicate.com/account/api-tokens
+- **Configure In:** Supabase Dashboard > Edge Functions > Secrets > `SAM_API_KEY`
+
+### Quick Setup Checklist
+
+- [ ] Create OpenAI account and get API key
+- [ ] Create Replicate account and get API token
+- [ ] Add `OPENAI_API_KEY` to Supabase Edge Functions secrets
+- [ ] Add `SAM_API_KEY` to Supabase Edge Functions secrets
+- [ ] Deploy `generate-visualization` Edge Function
+- [ ] Deploy `generate-sam-mask` Edge Function
+- [ ] Test visualization workflow with a sample image
+- [ ] Test SAM2 segmentation with point and box modes
 
 ## Performance Optimization
 
@@ -237,14 +298,28 @@ For issues or questions:
 
 ## SAM2 Integration
 
-LITHOVISION now uses SAM2 (Segment Anything Model 2) for enhanced segmentation:
+LITHOVISION uses SAM2 (Segment Anything Model 2) for precise countertop segmentation:
 
+### Features
+- **Point Mode**: Click to add positive (include) or negative (exclude) points
+- **Box Mode**: Click and drag to draw a bounding box around surfaces
 - **Improved Accuracy**: Better edge detection and surface recognition
 - **Complex Object Handling**: Handles intricate countertop shapes and angles
-- **Interactive Prompting**: Point-based selection with positive/negative prompts
-- **Fast Processing**: Optimized for real-time feedback
+- **Real-time Feedback**: Visual preview of points and boxes before generating masks
+- **Undo/Clear Controls**: Easy management of selection points and boxes
 
-To use SAM2 features, you need to configure a Replicate API key as `SAM_API_KEY` in your Supabase Edge Functions.
+### How to Use SAM2
+
+1. **On the Visualize page**, after uploading a reference image
+2. **Choose a segmentation mode**:
+   - **Point Mode**: Click on the countertop surface to include areas (green) or exclude unwanted areas (red)
+   - **Box Mode**: Click and drag to draw a bounding box around the entire countertop
+3. **Refine your selection** using Undo Last or Clear All buttons
+4. **Generate the mask** to create a precise selection
+5. The mask is then used for applying the stone slab texture
+
+### API Configuration
+SAM2 requires a Replicate API key configured as `SAM_API_KEY` in Supabase Edge Functions (see Setup Instructions above).
 
 ## Roadmap
 
