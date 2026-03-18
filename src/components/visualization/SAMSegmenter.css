@@ -110,6 +110,12 @@
   font-size: 0.8rem;
 }
 
+.sam-version {
+  margin-top: var(--spacing-xs);
+  opacity: 0.7;
+  font-style: italic;
+}
+
 .loading {
   display: inline-block;
   width: 12px;

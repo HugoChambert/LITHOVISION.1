@@ -72,7 +72,7 @@ Deno.serve(async (req: Request) => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        version: "f78d2c6b58f5f29e1d1f2c8b7c7a9b4e2d5d9c8b7c7a9b4e2d5d9c8b7c7a9b4e",
+        version: "3a5f7bf1eee96c683a2e65364b8ddfeb4e0cca6be2f4f778f4bb0c8e0d53c50f",
         input: {
           image: `data:image/jpeg;base64,${imageBase64}`,
           point_coords: [
@@ -83,6 +83,7 @@ Deno.serve(async (req: Request) => {
             ...positivePoints.map(() => 1),
             ...negativePoints.map(() => 0),
           ],
+          multimask_output: false,
         },
       }),
     });

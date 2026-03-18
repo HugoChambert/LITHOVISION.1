@@ -235,8 +235,20 @@ For issues or questions:
 - Review `database-setup.sql` for schema details
 - Contact support for assistance
 
+## SAM2 Integration
+
+LITHOVISION now uses SAM2 (Segment Anything Model 2) for enhanced segmentation:
+
+- **Improved Accuracy**: Better edge detection and surface recognition
+- **Complex Object Handling**: Handles intricate countertop shapes and angles
+- **Interactive Prompting**: Point-based selection with positive/negative prompts
+- **Fast Processing**: Optimized for real-time feedback
+
+To use SAM2 features, you need to configure a Replicate API key as `SAM_API_KEY` in your Supabase Edge Functions.
+
 ## Roadmap
 
+- [x] SAM2 integration for advanced segmentation
 - [ ] Stable Diffusion integration
 - [ ] Multiple surface support (islands, backsplashes)
 - [ ] Lighting adjustment controls

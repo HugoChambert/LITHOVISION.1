@@ -198,6 +198,9 @@ export function SAMSegmenter({ imageUrl, onMaskGenerated }: SAMSegmenterProps) {
           Points added: {points.filter(p => p.type === 'positive').length} include,
           {' '}{points.filter(p => p.type === 'negative').length} exclude
         </p>
+        <p className="sam-version">
+          <small>Powered by SAM2 - Enhanced segmentation accuracy</small>
+        </p>
       </div>
     </div>
   );
